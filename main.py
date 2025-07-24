@@ -19,44 +19,22 @@ keypad = {
 }
 inverseKeypad = {tuple(v): k for k, v in keypad.items()}
 
-# Pulsar dígitos en un teclado telefónico estándar
+# CODIFICACIÓN -------------------------------------
+# 1. Pulsar dígitos en un teclado telefónico estándar
 def pressDigit(digit):
     if digit in keypad:
         signal = getDigitSound(digit)
+        playSignal(signal)
         getSinSignalGraph(signal, digit)
         getFrequenciesGraph(signal, digit)
-        playSignal(signal)
 
-# Sonido asociado al dígito
+# Sonido asociado al dígito marcado
 def getDigitSound(digit):
     row, col = keypad[digit]
-    y1 = np.sin(2 * np.pi * fr[row] * t)
+    y1 = np.sin(2 * np.pi * fr[row] * t) # TOFIX t
     y2 = np.sin(2 * np.pi * fc[col] * t)
-    signal = (y1 + y2) / 2  # DTMF
-    return signal * 32767  # Scale to 16-bit audio range
-
-# Obtener gráfica de la señal senoidal asociada (gráfica continua)
-def getSinSignalGraph(signal, digit):
-    plt.figure(figsize=(10, 4))
-    plt.plot(t, signal)
-    plt.title(f'Sin Signal for Digit {digit}')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Amplitude')
-    plt.grid()
-    plt.show()
-
-# Obtener gráfica de las frecuencias que generan la gráfica continua (gráfica discreta)
-def getFrequenciesGraph(signal, digit):
-    N = len(signal)
-    freq = np.fft.fftfreq(N, 1/Fs)
-    freq_signal = np.abs(fft(signal))
-    plt.figure(figsize=(10, 4))
-    plt.plot(freq[:N//2], freq_signal[:N//2])
-    plt.title(f'Frequency Spectrum for Digit {digit}')
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('Magnitude')
-    plt.grid()
-    plt.show()
+    signal = (y1 + y2) / 2
+    return signal * 32767  # TOFIX
 
 # Reproducir la señal cargada
 def playSignal(signal):
@@ -64,8 +42,32 @@ def playSignal(signal):
     write('temp.wav', Fs, signal.astype(np.int16))
     playsound('temp.wav')
 
-# Decodificar la señal usando la transformada de Fourier y mostrar los dígitos marcados
-def decodeSignal():
+# Obtener gráfica de la señal senoidal asociada (gráfica continua)
+def getSinSignalGraph(signal, digit):
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, signal)
+    plt.title(f'Gráfica de señal senoidal de {digit}')
+    plt.xlabel('Tiempo (s)')
+    plt.ylabel('Amplitud')
+    plt.grid()
+    plt.show()
+
+# Obtener gráfica de las frecuencias que generan la gráfica continua (gráfica discreta)
+def getFrequenciesGraph(signal, digit):
+    N = len(signal) # TOFIX
+    freq = np.fft.fftfreq(N, 1/Fs)
+    freq_signal = np.abs(fft(signal))
+    plt.figure(figsize=(10, 4))
+    plt.plot(freq[:N//2], freq_signal[:N//2])
+    plt.title(f'Gráfica de frecuencias de {digit}')
+    plt.xlabel('Frecuencia (Hz)')
+    plt.ylabel('Magnitud')
+    plt.grid()
+    plt.show()
+
+# DECODIFICACIÓN -------------------------------------
+# 2. Decodificar la señal usando la transformada de Fourier y mostrar los dígitos marcados
+def decodeLoadedSignal():
     file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if file_path:
         fs, data = wavfile.read(file_path)
@@ -91,7 +93,7 @@ def decodeSignal():
         return ''.join(digits[:11])  # Return first 11 digits
 
 # Graficar la señal cargada
-def graphSignal():
+def graphLoadedSignal():
     file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if file_path:
         fs, data = wavfile.read(file_path)
@@ -106,12 +108,12 @@ def graphSignal():
         plt.ylabel('Amplitude')
         plt.grid()
         plt.show()
-        digits = decodeSignal()
+        digits = decodeLoadedSignal()
         print(f"Decoded Digits: {digits}")
 
 # GUI Setup
 root = tk.Tk()
-root.title("DTMF Signal Generator and Decoder")
+root.title("Análisis espectral de marcado de número telefónicos")
 
 # Botones Keypad
 frame = ttk.Frame(root, padding="10")
@@ -123,7 +125,7 @@ for i, row in enumerate(['123', '456', '789', '*0#']):
         btn.grid(row=i, column=j, padx=5, pady=5)
 
 # Botón de cargar
-load_btn = ttk.Button(root, text="Load and Decode Signal", command=graphSignal)
+load_btn = ttk.Button(root, text="Cargar señal de archivo", command=graphLoadedSignal)
 load_btn.grid(row=1, column=0, pady=10)
 
 root.mainloop()
