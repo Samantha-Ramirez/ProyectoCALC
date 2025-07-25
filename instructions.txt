@@ -1,0 +1,12 @@
+Dependencias -----------------------
+tkinter
+numpy
+playsound3
+playsound==1.2.2
+matplotlib.pyplot
+scipy
+pyinstaller
+
+Instrucciones -----------------------
+- Ejecutar pyinstaller --windowed main.py
+- Encontrar ejecutable en dist/

@@ -32,8 +32,8 @@ def getDigitSound(digit):
 # Reproducir la señal
 def playSignal(signal):
     from scipy.io.wavfile import write
-    write('temp.wav', Fs, signal.astype(np.int16))
-    playsound('temp.wav')
+    write('output.wav', Fs, signal.astype(np.int16))
+    playsound('output.wav')
 
 # Graficar señal senoidal (gráfica continua)
 def getSinSignalGraph(signal, digit):
