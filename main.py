@@ -4,7 +4,7 @@ import numpy as np
 from playsound3 import playsound
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
-from numpy.fft import fft, fftfreq
+from scipy.fft import fft, fftfreq
 
 # Constantes
 T = 0.25  # Duración de cada tono en segundos
@@ -71,7 +71,7 @@ def getClickedDigitFreqGraph(signal, digit):
     plt.grid()
     plt.show()
 
-# Obtener recuencia más cercana
+# Obtener frecuencia más cercana
 def findClosestFreq(peakFreq, frequencies):
     return frequencies[np.argmin(np.abs(frequencies - peakFreq))]
 
@@ -123,7 +123,7 @@ def getDecodeSegment(segment, fs):
         # Identifica picos de frecuencia en estos rangos
         rowPeakFreq = freq[rowMask][np.argmax(freqSignal[rowMask])]
         colPeakFreq = freq[colMask][np.argmax(freqSignal[colMask])]
-        # Mapea picos a las frecuencias estándar y asgina el dígito
+        # Mapea picos a las frecuencias estándar y asigna el dígito
         rowFreq = findClosestFreq(rowPeakFreq, fr)
         colFreq = findClosestFreq(colPeakFreq, fc)
         rowIdx = np.where(fr == rowFreq)[0][0]
