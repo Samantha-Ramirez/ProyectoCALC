@@ -9,7 +9,7 @@ from scipy.fft import fft, fftfreq
 # Constantes
 T = 0.25  # Duración de cada tono en segundos
 Fs = 32768  # Frecuencia de muestreo
-# Separación de 1/Fs
+INTERDIGIT_PAUSE = 0.05  # Pausa de 50 ms según Q.24
 t = np.linspace(0, T, int(Fs * T), endpoint=False)  # Vector de tiempo
 fr = np.array([697, 770, 852, 941])  # Frecuencias de filas
 fc = np.array([1209, 1336, 1477])  # Frecuencias de columnas
@@ -85,7 +85,7 @@ def loadDigit():
         getLoadedDigitSpectrogram(data, fs)
         digits = getLoadedDigitSignal(fs, data)
         updateDecodedLabel(decodedLabel, digits)
-        
+
 def loadAudioFile(filePath=None):
     if not filePath:
         filePath = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -98,11 +98,13 @@ def loadAudioFile(filePath=None):
         return fs, data
     return None, None
 
-def getLoadedDigitSignal(fs, data): # Decodificación
-    segmentSize = int(fs * T) # Tamaño de segmento
+def getLoadedDigitSignal(fs, data):
+    segmentSize = int(fs * T)  # Tamaño de segmento
+    pauseSize = int(fs * INTERDIGIT_PAUSE)  # Tamaño de la pausa
+    totalSegmentSize = segmentSize + pauseSize  # Tamaño total esperado por dígito + pausa
     digits = []
-    for i in range(0, len(data), segmentSize): # Divide señal en segmentos temporales
-        segment = data[i:i+segmentSize]
+    for i in range(0, len(data) - segmentSize, totalSegmentSize):  # Ajuste por tamaño total
+        segment = data[i:i + segmentSize]
         if len(segment) < segmentSize:
             break
         digit = getDecodeSegment(segment, fs)
@@ -117,8 +119,9 @@ def getDecodeSegment(segment, fs):
     freq = fftfreq(N, 1/Fs) # Intervalo de tiempo entre muestras para mapear las frecuencias asociadas a la FFT
     freqSignal = np.abs(fft(segment)) / np.sqrt(N) # Calcula la Transformada discreta de Fourier del segmento de la señal y normaliza la magnitud
     # Filtra los rangos de frecuencias
-    rowMask = (freq >= 600) & (freq <= 1000)
-    colMask = (freq >= 1100) & (freq <= 1500)
+    threshold = np.max(freqSignal) * 0.1  # Umbral del 10% del pico máximo
+    rowMask = (freq >= 600) & (freq <= 1000) & (freqSignal > threshold)
+    colMask = (freq >= 1100) & (freq <= 1500) & (freqSignal > threshold)
     if np.any(rowMask) and np.any(colMask):
         # Identifica picos de frecuencia en estos rangos
         rowPeakFreq = freq[rowMask][np.argmax(freqSignal[rowMask])]
@@ -134,21 +137,25 @@ def getDecodeSegment(segment, fs):
 # Graficar señal senoidal (gráfica continua)
 def getLoadedDigitSinSignalGraph(data, fs):
     tLoaded = np.linspace(0, len(data)/fs, len(data))
-    plt.figure(figsize=(10, 4))
+    plt.figure(figsize=(12, 6))
     plt.plot(tLoaded, data)
     plt.title('Señal cargada')
     plt.xlabel('Tiempo (s)')
     plt.ylabel('Amplitud')
     plt.grid()
+    plt.ylim(-40000, 40000)
+    plt.tight_layout()
     plt.show()
 
 def getLoadedDigitSpectrogram(data, fs):
-    plt.figure(figsize=(10, 4))
-    plt.specgram(data, Fs=fs, NFFT=1024, noverlap=512)
+    plt.figure(figsize=(12, 6))
+    plt.specgram(data, Fs=fs, NFFT=2048, noverlap=1024)
     plt.title('Espectrograma de la señal cargada')
     plt.xlabel('Tiempo (s)')
     plt.ylabel('Frecuencia (Hz)')
     plt.colorbar(label='Intensidad')
+    plt.ylim(0, 2000)
+    plt.tight_layout()
     plt.show()
 
 # Mostrar los dígitos decodificados
