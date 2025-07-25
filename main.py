@@ -22,6 +22,14 @@ inverseKeypad = {v: k for k, v in keypad.items()}
 
 # CODIFICACIÓN -------------------------------------
 # 1. Pulsar dígitos en un teclado telefónico estándar
+def pressDigit(digit):
+    if digit in keypad:
+        signal = getDigitSound(digit)
+        playSignal(signal)
+        getSinSignalGraph(signal, digit)
+        getFreqGraph(signal, digit)
+
+# Obtener sonido asociado al dígito marcado
 def getDigitSound(digit):
     row, col = keypad[digit]
     y1 = np.sin(2 * np.pi * fr[row] * t)
@@ -29,7 +37,7 @@ def getDigitSound(digit):
     signal = (y1 + y2) / 2
     return signal * 32767
 
-# Reproducir la señal
+# Reproducir señal
 def playSignal(signal):
     from scipy.io.wavfile import write
     write('output.wav', Fs, signal.astype(np.int16))
@@ -62,21 +70,13 @@ def getFreqGraph(signal, digit):
     plt.grid()
     plt.show()
 
-# Manejar pulsación de dígitos
-def pressDigit(digit):
-    if digit in keypad:
-        signal = getDigitSound(digit)
-        playSignal(signal)
-        getSinSignalGraph(signal, digit)
-        getFreqGraph(signal, digit)
-
 # Obtener recuencia más cercana
 def findClosestFreq(peakFreq, frequencies):
     return frequencies[np.argmin(np.abs(frequencies - peakFreq))]
 
 # DECODIFICACIÓN -------------------------------------
 # 2. Decodificar la señal usando la transformada de Fourier y mostrar los dígitos marcados
-def decodeLoadedSignal(filePath=None):
+def loadAudioFile(filePath=None):
     if not filePath:
         filePath = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if filePath:
@@ -85,63 +85,67 @@ def decodeLoadedSignal(filePath=None):
             numSamples = int(len(data) * Fs / fs)
             data = np.interp(np.linspace(0, len(data), numSamples), np.arange(len(data)), data)
             fs = Fs
-        segmentSize = int(fs * T)
-        digits = []
-        for i in range(0, len(data), segmentSize):
-            segment = data[i:i+segmentSize]
-            if len(segment) < segmentSize:
-                break
-            N = len(segment)
-            freq = fftfreq(N, 1/Fs)
-            freqSignal = np.abs(fft(segment)) / np.sqrt(N)  # Normalización para magnitud precisa
-            rowMask = (freq >= 600) & (freq <= 1000)
-            colMask = (freq >= 1100) & (freq <= 1500)
-            if np.any(rowMask) and np.any(colMask):
-                rowPeakFreq = freq[rowMask][np.argmax(freqSignal[rowMask])]
-                colPeakFreq = freq[colMask][np.argmax(freqSignal[colMask])] 
-                rowFreq = findClosestFreq(rowPeakFreq, fr)
-                colFreq = findClosestFreq(colPeakFreq, fc)
-                rowIdx = np.where(fr == rowFreq)[0][0]
-                colIdx = np.where(fc == colFreq)[0][0]
-                digit = inverseKeypad.get((rowIdx, colIdx), '?')
-                digits.append(digit)
-        return ''.join(digits[:11])  # Limitar a 11 dígitos
+        return fs, data
+    return None, None
 
-# Cargar, reproducir y graficar señal
-def graphLoadedSignal():
-    filePath = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
-    if filePath:
-        fs, data = wavfile.read(filePath)
-        if fs != Fs:
-            numSamples = int(len(data) * Fs / fs)
-            data = np.interp(np.linspace(0, len(data), numSamples), np.arange(len(data)), data)
-            fs = Fs
-        tLoaded = np.linspace(0, len(data)/fs, len(data))
-        
-        # Reproducir señal cargada
+def decodeSegment(segment, fs):
+    N = len(segment)
+    freq = fftfreq(N, 1/Fs)
+    freqSignal = np.abs(fft(segment)) / np.sqrt(N)
+    rowMask = (freq >= 600) & (freq <= 1000)
+    colMask = (freq >= 1100) & (freq <= 1500)
+    if np.any(rowMask) and np.any(colMask):
+        rowPeakFreq = freq[rowMask][np.argmax(freqSignal[rowMask])]
+        colPeakFreq = freq[colMask][np.argmax(freqSignal[colMask])]
+        rowFreq = findClosestFreq(rowPeakFreq, fr)
+        colFreq = findClosestFreq(colPeakFreq, fc)
+        rowIdx = np.where(fr == rowFreq)[0][0]
+        colIdx = np.where(fc == colFreq)[0][0]
+        return inverseKeypad.get((rowIdx, colIdx), '?')
+    return None
+
+def decodeSignal(fs, data):
+    segmentSize = int(fs * T)
+    digits = []
+    for i in range(0, len(data), segmentSize):
+        segment = data[i:i+segmentSize]
+        if len(segment) < segmentSize:
+            break
+        digit = decodeSegment(segment, fs)
+        if digit:
+            digits.append(digit)
+    return ''.join(digits[:11])  # Limitar a 11 dígitos
+
+def plotTimeDomain(data, fs):
+    tLoaded = np.linspace(0, len(data)/fs, len(data))
+    plt.figure(figsize=(10, 4))
+    plt.plot(tLoaded, data)
+    plt.title('Señal cargada')
+    plt.xlabel('Tiempo (s)')
+    plt.ylabel('Amplitud')
+    plt.grid()
+    plt.show()
+
+def plotSpectrogram(data, fs):
+    plt.figure(figsize=(10, 4))
+    plt.specgram(data, Fs=fs, NFFT=1024, noverlap=512)
+    plt.title('Espectrograma de la señal cargada')
+    plt.xlabel('Tiempo (s)')
+    plt.ylabel('Frecuencia (Hz)')
+    plt.colorbar(label='Intensidad')
+    plt.show()
+
+def updateDecodedLabel(label, digits):
+    label.config(text=f"Dígitos decodificados: {digits}")
+
+def loadDigits():
+    fs, data = loadAudioFile()
+    if data is not None:
         playSignal(data)
-        
-        # Graficar señal cargada
-        plt.figure(figsize=(10, 4))
-        plt.plot(tLoaded, data)
-        plt.title('Señal cargada')
-        plt.xlabel('Tiempo (s)')
-        plt.ylabel('Amplitud')
-        plt.grid()
-        plt.show()
-        
-        # Añadir espectrograma
-        plt.figure(figsize=(10, 4))
-        plt.specgram(data, Fs=fs, NFFT=1024, noverlap=512)
-        plt.title('Espectrograma de la señal cargada')
-        plt.xlabel('Tiempo (s)')
-        plt.ylabel('Frecuencia (Hz)')
-        plt.colorbar(label='Intensidad')
-        plt.show()
-        
-        # Decodificar y mostrar dígitos
-        digits = decodeLoadedSignal(filePath)
-        decodedLabel.config(text=f"Dígitos decodificados: {digits}")
+        plotTimeDomain(data, fs)
+        plotSpectrogram(data, fs)
+        digits = decodeSignal(fs, data)
+        updateDecodedLabel(decodedLabel, digits)
 
 # Configuración de la GUI
 root = tk.Tk()
@@ -158,7 +162,7 @@ for i, row in enumerate(['123', '456', '789', '*0#']):
         btn.grid(row=i, column=j, padx=5, pady=5)
 
 # Botón para cargar señal
-loadBtn = ttk.Button(root, text="Cargar señal de archivo", command=graphLoadedSignal)
+loadBtn = ttk.Button(root, text="Cargar señal de archivo", command=loadDigits)
 loadBtn.grid(row=1, column=0, pady=10)
 
 # Etiqueta para mostrar dígitos decodificados
