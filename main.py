@@ -9,6 +9,7 @@ from numpy.fft import fft, fftfreq
 # Constantes
 T = 0.25  # Duración de cada tono en segundos
 Fs = 32768  # Frecuencia de muestreo
+# Separación de 1/Fs
 t = np.linspace(0, T, int(Fs * T), endpoint=False)  # Vector de tiempo
 fr = np.array([697, 770, 852, 941])  # Frecuencias de filas
 fc = np.array([1209, 1336, 1477])  # Frecuencias de columnas
@@ -22,15 +23,15 @@ inverseKeypad = {v: k for k, v in keypad.items()}
 
 # CODIFICACIÓN -------------------------------------
 # 1. Pulsar dígitos en un teclado telefónico estándar
-def pressDigit(digit):
+def clickDigit(digit):
     if digit in keypad:
-        signal = getDigitSound(digit)
-        playSignal(signal)
-        getSinSignalGraph(signal, digit)
-        getFreqGraph(signal, digit)
+        signal = getClickedDigitSignal(digit)
+        playDigitSignal(signal)
+        getClickedDigitSinSignalGraph(signal, digit)
+        getClickedDigitFreqGraph(signal, digit)
 
 # Obtener sonido asociado al dígito marcado
-def getDigitSound(digit):
+def getClickedDigitSignal(digit): # Codificación
     row, col = keypad[digit]
     y1 = np.sin(2 * np.pi * fr[row] * t)
     y2 = np.sin(2 * np.pi * fc[col] * t)
@@ -38,13 +39,13 @@ def getDigitSound(digit):
     return signal * 32767
 
 # Reproducir señal
-def playSignal(signal):
+def playDigitSignal(signal):
     from scipy.io.wavfile import write
     write('output.wav', Fs, signal.astype(np.int16))
     playsound('output.wav')
 
 # Graficar señal senoidal (gráfica continua)
-def getSinSignalGraph(signal, digit):
+def getClickedDigitSinSignalGraph(signal, digit):
     plt.figure(figsize=(10, 4))
     plt.plot(t, signal)
     plt.title(f'Señal senoidal de {digit}')
@@ -54,7 +55,7 @@ def getSinSignalGraph(signal, digit):
     plt.show()
 
 # Graficar espectro de frecuencias (gráfica discreta)
-def getFreqGraph(signal, digit):
+def getClickedDigitFreqGraph(signal, digit):
     N = len(signal)
     freq = fftfreq(N, 1/Fs)
     freqSignal = np.abs(fft(signal)) / np.sqrt(N)  # Normalización según propiedad DFT
@@ -75,7 +76,16 @@ def findClosestFreq(peakFreq, frequencies):
     return frequencies[np.argmin(np.abs(frequencies - peakFreq))]
 
 # DECODIFICACIÓN -------------------------------------
-# 2. Decodificar la señal usando la transformada de Fourier y mostrar los dígitos marcados
+# 2. Decodificar la señal usando la transformada de Fourier
+def loadDigit():
+    fs, data = loadAudioFile()
+    if data is not None:
+        playDigitSignal(data)
+        getLoadedDigitSinSignalGraph(data, fs)
+        getLoadedDigitSpectrogram(data, fs)
+        digits = getLoadedDigitSignal(fs, data)
+        updateDecodedLabel(decodedLabel, digits)
+        
 def loadAudioFile(filePath=None):
     if not filePath:
         filePath = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -88,15 +98,32 @@ def loadAudioFile(filePath=None):
         return fs, data
     return None, None
 
-def decodeSegment(segment, fs):
+def getLoadedDigitSignal(fs, data): # Decodificación
+    segmentSize = int(fs * T) # Tamaño de segmento
+    digits = []
+    for i in range(0, len(data), segmentSize): # Divide señal en segmentos temporales
+        segment = data[i:i+segmentSize]
+        if len(segment) < segmentSize:
+            break
+        digit = getDecodeSegment(segment, fs)
+        if digit:
+            digits.append(digit)
+    return ''.join(digits[:11])  # Limitar a 11 dígitos
+
+def getDecodeSegment(segment, fs):
+    # Analiza segmento individual para identificar el dígito asociado al espectro de frecuencias
     N = len(segment)
-    freq = fftfreq(N, 1/Fs)
-    freqSignal = np.abs(fft(segment)) / np.sqrt(N)
+    # Transforma el segmento al dominio de frecuencia
+    freq = fftfreq(N, 1/Fs) # Intervalo de tiempo entre muestras para mapear las frecuencias asociadas a la FFT
+    freqSignal = np.abs(fft(segment)) / np.sqrt(N) # Calcula la Transformada discreta de Fourier del segmento de la señal y normaliza la magnitud
+    # Filtra los rangos de frecuencias
     rowMask = (freq >= 600) & (freq <= 1000)
     colMask = (freq >= 1100) & (freq <= 1500)
     if np.any(rowMask) and np.any(colMask):
+        # Identifica picos de frecuencia en estos rangos
         rowPeakFreq = freq[rowMask][np.argmax(freqSignal[rowMask])]
         colPeakFreq = freq[colMask][np.argmax(freqSignal[colMask])]
+        # Mapea picos a las frecuencias estándar y asgina el dígito
         rowFreq = findClosestFreq(rowPeakFreq, fr)
         colFreq = findClosestFreq(colPeakFreq, fc)
         rowIdx = np.where(fr == rowFreq)[0][0]
@@ -104,19 +131,8 @@ def decodeSegment(segment, fs):
         return inverseKeypad.get((rowIdx, colIdx), '?')
     return None
 
-def decodeSignal(fs, data):
-    segmentSize = int(fs * T)
-    digits = []
-    for i in range(0, len(data), segmentSize):
-        segment = data[i:i+segmentSize]
-        if len(segment) < segmentSize:
-            break
-        digit = decodeSegment(segment, fs)
-        if digit:
-            digits.append(digit)
-    return ''.join(digits[:11])  # Limitar a 11 dígitos
-
-def plotTimeDomain(data, fs):
+# Graficar señal senoidal (gráfica continua)
+def getLoadedDigitSinSignalGraph(data, fs):
     tLoaded = np.linspace(0, len(data)/fs, len(data))
     plt.figure(figsize=(10, 4))
     plt.plot(tLoaded, data)
@@ -126,7 +142,7 @@ def plotTimeDomain(data, fs):
     plt.grid()
     plt.show()
 
-def plotSpectrogram(data, fs):
+def getLoadedDigitSpectrogram(data, fs):
     plt.figure(figsize=(10, 4))
     plt.specgram(data, Fs=fs, NFFT=1024, noverlap=512)
     plt.title('Espectrograma de la señal cargada')
@@ -135,17 +151,9 @@ def plotSpectrogram(data, fs):
     plt.colorbar(label='Intensidad')
     plt.show()
 
+# Mostrar los dígitos decodificados
 def updateDecodedLabel(label, digits):
     label.config(text=f"Dígitos decodificados: {digits}")
-
-def loadDigits():
-    fs, data = loadAudioFile()
-    if data is not None:
-        playSignal(data)
-        plotTimeDomain(data, fs)
-        plotSpectrogram(data, fs)
-        digits = decodeSignal(fs, data)
-        updateDecodedLabel(decodedLabel, digits)
 
 # Configuración de la GUI
 root = tk.Tk()
@@ -158,11 +166,11 @@ frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 # Botones del teclado
 for i, row in enumerate(['123', '456', '789', '*0#']):
     for j, digit in enumerate(row):
-        btn = ttk.Button(frame, text=digit, command=lambda d=digit: pressDigit(d))
+        btn = ttk.Button(frame, text=digit, command=lambda d=digit: clickDigit(d))
         btn.grid(row=i, column=j, padx=5, pady=5)
 
 # Botón para cargar señal
-loadBtn = ttk.Button(root, text="Cargar señal de archivo", command=loadDigits)
+loadBtn = ttk.Button(root, text="Cargar señal de archivo", command=loadDigit)
 loadBtn.grid(row=1, column=0, pady=10)
 
 # Etiqueta para mostrar dígitos decodificados

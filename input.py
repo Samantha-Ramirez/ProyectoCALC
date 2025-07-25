@@ -29,7 +29,7 @@ def getPause(duration=0.05):  # Pausa de 0.05 segundos por defecto
 
 # Generar un único archivo WAV con todos los dígitos
 def generateCombinedWav():
-    digits = ['2', '4', '6', '8', '2', '4', '6', '8', '2', '4', '6']  # 11 dígitos
+    digits = ['1', '9', '6', '2', '7', '4', '1', '0', '*', '8', '3']  # 11 dígitos
     combined_signal = np.array([])
 
     for digit in digits:
